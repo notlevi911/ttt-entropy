@@ -26,7 +26,7 @@ function App(): JSX.Element {
     <div className="App">
       <header className="App-header">
         <h1>Entropy TicTacToe</h1>
-        <p>A multiplayer hidden-information strategy game</p>
+        <p>Entropy in TicTacToe, crazy ain't it!</p>
       </header>
       
       <main>

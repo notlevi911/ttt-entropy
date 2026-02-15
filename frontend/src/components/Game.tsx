@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { GameState, WebSocketMessage, Player, RoomInfo } from '../types';
+import { GameState, WebSocketMessage, RoomInfo } from '../types';
 import GameBoard from './GameBoard';
 import ChatPanel from './ChatPanel';
 import GameStatusBar from './GameStatusBar';
 import Notification from './Notification';
+import RulesPopup from './RulesPopup';
 
 interface GameProps {
   roomCode: string;
@@ -11,7 +12,7 @@ interface GameProps {
   onBackToLobby: () => void;
 }
 
-interface Notification {
+interface GameNotification {
   id: string;
   message: string;
   type: 'success' | 'error' | 'info' | 'warning';
@@ -23,14 +24,15 @@ const Game: React.FC<GameProps> = ({ roomCode, playerName, onBackToLobby }) => {
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected' | 'error'>('connecting');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [chatMessages, setChatMessages] = useState<WebSocketMessage[]>([]);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notifications, setNotifications] = useState<GameNotification[]>([]);
   const [playAgainStatus, setPlayAgainStatus] = useState<string>('');
+  const [showRules, setShowRules] = useState<boolean>(false);
   
   const wsRef = useRef<WebSocket | null>(null);
 
   const addNotification = (message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
     const id = Date.now().toString();
-    const newNotification: Notification = { id, message, type };
+    const newNotification: GameNotification = { id, message, type };
     setNotifications(prev => [...prev, newNotification]);
   };
 
@@ -39,6 +41,44 @@ const Game: React.FC<GameProps> = ({ roomCode, playerName, onBackToLobby }) => {
   };
 
   useEffect(() => {
+    const connectToRoom = (): void => {
+      const wsUrl = process.env.REACT_APP_WS_URL || 'ws://localhost:8000';
+      const ws = new WebSocket(`${wsUrl}/ws/${roomCode}`);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        console.log('Connected to room:', roomCode);
+        setConnectionStatus('connected');
+        setErrorMessage('');
+        
+        // Send join message with player name
+        ws.send(JSON.stringify({
+          type: 'join',
+          player_name: playerName
+        }));
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const message: WebSocketMessage = JSON.parse(event.data);
+          handleWebSocketMessage(message);
+        } catch (error) {
+          console.error('Error parsing WebSocket message:', error);
+        }
+      };
+
+      ws.onclose = () => {
+        console.log('WebSocket connection closed');
+        setConnectionStatus('disconnected');
+      };
+
+      ws.onerror = () => {
+        console.error('WebSocket connection error');
+        setConnectionStatus('error');
+        setErrorMessage('Failed to connect to game server');
+      };
+    };
+    
     connectToRoom();
     
     return () => {
@@ -46,45 +86,8 @@ const Game: React.FC<GameProps> = ({ roomCode, playerName, onBackToLobby }) => {
         wsRef.current.close();
       }
     };
-  }, [roomCode]);
-
-  const connectToRoom = (): void => {
-    const wsUrl = `ws://localhost:8000/ws/${roomCode}`;
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      console.log('Connected to room:', roomCode);
-      setConnectionStatus('connected');
-      setErrorMessage('');
-      
-      // Send join message with player name
-      ws.send(JSON.stringify({
-        type: 'join',
-        player_name: playerName
-      }));
-    };
-
-    ws.onmessage = (event) => {
-      try {
-        const message: WebSocketMessage = JSON.parse(event.data);
-        handleWebSocketMessage(message);
-      } catch (error) {
-        console.error('Error parsing WebSocket message:', error);
-      }
-    };
-
-    ws.onclose = () => {
-      console.log('WebSocket connection closed');
-      setConnectionStatus('disconnected');
-    };
-
-    ws.onerror = () => {
-      console.error('WebSocket connection error');
-      setConnectionStatus('error');
-      setErrorMessage('Failed to connect to game server');
-    };
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomCode, playerName]);
 
   const handleWebSocketMessage = (message: WebSocketMessage): void => {
     switch (message.type) {
@@ -255,6 +258,12 @@ const Game: React.FC<GameProps> = ({ roomCode, playerName, onBackToLobby }) => {
             currentPlayer={currentPlayer}
           />
         </div>
+      </div>
+
+      <RulesPopup isOpen={showRules} onClose={() => setShowRules(false)} />
+
+      <div className="rules-button" onClick={() => setShowRules(true)}>
+        <span>&lt;</span>
       </div>
     </div>
   );

@@ -1,63 +1,72 @@
-# 🎮 Entropy TicTacToe
+# Entropy TicTacToe
 
-A multiplayer hidden-information strategy game that reimagines classic TicTacToe using constrained probability, deduction, and psychological gameplay.
+A multiplayer strategy game that combines traditional TicTacToe with hidden information and probability mechanics.
 
-## 🧠 Game Concept
+## How It Works
 
-Entropy TicTacToe is a probabilistic deduction-based multiplayer board game where:
+The game uses a 3x3 board with 9 hidden pieces. Each board contains exactly 5 pieces of one symbol (X or O) and 4 of the other, but players don't know which symbol has the majority. Every piece shows probability percentages that update as the game progresses.
 
-- The board contains 9 hidden pieces
-- Exactly 5 of one symbol and 4 of the other exist  
-- At game start, the majority symbol (5X/4O or 5O/4X) is randomly chosen
-- The majority is hidden from players
-- Each piece displays two probabilities (e.g., 82% / 18%)
-- Players do not know which probability corresponds to their symbol
-- Probabilities dynamically update as the game progresses
+**Placement Phase**: Players alternate placing pieces on empty cells. All symbols remain hidden.
 
-## 🏗️ Tech Stack
+**Reveal Phase**: Players take turns revealing pieces to find their symbols and form three in a row.
 
-- **Frontend**: React with TypeScript
-- **Backend**: FastAPI (Python)
-- **Real-time Communication**: WebSockets
-- **State Management**: In-memory server state
+The key challenge is using probability information and deduction to make strategic decisions about where to place and reveal pieces.
 
-## 🚀 Getting Started
+[Setup Instructions](#setup)
 
-### Prerequisites
+## Game Rules
 
-- Python 3.8+
-- Node.js 16+
-- npm or yarn
+- 3x3 grid with 9 total pieces
+- Exactly 5 of one symbol, 4 of the other
+- Players don't know which symbol they need
+- Each piece displays probability percentages
+- Probabilities update after each reveal
+- Win by getting 3 symbols in a row, column, or diagonal
+- Two phases: placement then reveal
+
+## Technical Details
+
+- Frontend: React with TypeScript
+- Backend: FastAPI with WebSocket communication
+- Real-time multiplayer with room-based matchmaking
+- Server-authoritative game logic
+
+## Setup
+
+### Requirements
+
+- Python 3.8 or higher
+- Node.js 16 or higher
+- npm package manager
 
 ### Backend Setup
 
-1. Navigate to the backend directory:
+1. Navigate to backend directory:
    ```bash
    cd backend
    ```
 
-2. Create a virtual environment (recommended):
+2. Create virtual environment:
    ```bash
    python -m venv venv
-   venv\Scripts\activate  # On Windows
-   source venv/bin/activate  # On macOS/Linux
+   venv\Scripts\activate    # Windows
+   source venv/bin/activate # macOS/Linux
    ```
 
-3. Install Python dependencies:
+3. Install dependencies:
    ```bash
    pip install -r requirements.txt
    ```
 
-4. Run the FastAPI server:
+4. Run server:
    ```bash
    python main.py
    ```
-
-   The backend will be available at `http://localhost:8000`
+   Server runs on http://localhost:8000
 
 ### Frontend Setup
 
-1. Navigate to the frontend directory:
+1. Navigate to frontend directory:
    ```bash
    cd frontend
    ```
@@ -67,117 +76,25 @@ Entropy TicTacToe is a probabilistic deduction-based multiplayer board game wher
    npm install
    ```
 
-3. Start the React development server:
+3. Start development server:
    ```bash
    npm start
    ```
+   Frontend runs on http://localhost:3000
 
-   The frontend will be available at `http://localhost:3000`
+### Playing the Game
 
-## 🎯 How to Play
+1. Open http://localhost:3000 in two browser windows
+2. One player creates a room and shares the room code
+3. Second player joins using the room code
+4. Game starts automatically when both players are ready
 
-### Phase 1 - Placement Phase
-1. Join a room using a 6-character room code
-2. Two players take turns placing probability pieces on empty cells
-3. All pieces remain hidden during placement
-4. The center piece probability stays hidden until placement ends
-5. After all 9 pieces are placed → transition to Reveal Phase
+### Development
 
-### Phase 2 - Reveal Phase  
-1. Players take turns revealing any hidden cell
-2. Each reveal shows the actual symbol (X or O)
-3. Probabilities update dynamically after each reveal
-4. First player to get 3 in a row wins
-5. If all pieces are revealed with no winner → draw
+The backend uses in-memory storage, so rooms reset when the server restarts. For production use, consider adding persistent storage.
 
-## 🔢 Game Rules
+WebSocket endpoints:
+- `GET /create_room` - Create new room
+- `WebSocket /ws/{room_code}` - Game communication
 
-- **Board Structure**: 3×3 grid (9 total cells)
-- **Symbol Distribution**: Exactly 5 of one symbol, 4 of the other
-- **Hidden Information**: Majority symbol is unknown to both players
-- **Probability Display**: Each piece shows percentages like "82% / 18%"
-- **Dynamic Updates**: Probabilities change based on revealed information
-- **Win Condition**: 3 symbols in a row, column, or diagonal
-- **No Extra Turns**: Players alternate after each action
-
-## 🎨 Features
-
-- **Real-time Multiplayer**: WebSocket-based gameplay
-- **Live Chat**: In-game messaging system
-- **Room-based Matchmaking**: Create or join rooms with codes
-- **Responsive Design**: Works on desktop and mobile
-- **Dynamic Probabilities**: Smart probability updates
-- **Game State Management**: Server-authoritative logic
-
-## 🔧 Development
-
-### Backend API Endpoints
-
-- `GET /`: Health check
-- `GET /create_room`: Create a new room and return room code
-- `WebSocket /ws/{room_code}`: Real-time game communication
-
-### WebSocket Message Types
-
-**Client → Server:**
-- `place_piece`: Place a piece during placement phase
-- `reveal_piece`: Reveal a piece during reveal phase  
-- `chat_message`: Send a chat message
-
-**Server → Client:**
-- `game_state`: Updated game state
-- `player_joined`: New player joined room
-- `player_left`: Player left room
-- `chat_message`: Broadcast chat message
-- `error`: Error message
-
-### Game State Structure
-
-```typescript
-interface GameState {
-  board: (string | null)[];
-  probabilities: (readonly [number, number] | readonly [null, null])[];
-  phase: 'placement' | 'reveal';
-  current_turn: number;
-  revealed_cells: boolean[];
-  winner: string | null;
-  game_over: boolean;
-  player_id: number;
-}
-```
-
-## 🐛 Troubleshooting
-
-### Common Issues
-
-1. **WebSocket Connection Failed**
-   - Ensure backend is running on port 8000
-   - Check firewall settings
-   - Verify room code is correct
-
-2. **Room is Full**
-   - Each room supports maximum 2 players
-   - Create a new room or wait for a player to leave
-
-3. **Build Errors**
-   - Run `npm install` to ensure all dependencies are installed
-   - Check Node.js and npm versions meet requirements
-
-### Development Notes
-
-- The backend uses in-memory storage (rooms reset on server restart)
-- For production, consider adding Redis or database persistence
-- WebSocket connections are automatically cleaned up on disconnect
-- Game logic is server-authoritative to prevent cheating
-
-## 📄 License
-
-This project is for educational and demonstration purposes.
-
-## 🤝 Contributing
-
-Feel free to submit issues and enhancement requests!
-
----
-
-Built with ❤️ using React, TypeScript, and FastAPI
+Game state is managed server-side to prevent cheating.

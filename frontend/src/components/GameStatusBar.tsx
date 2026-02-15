@@ -72,6 +72,12 @@ const GameStatusBar: React.FC<GameStatusBarProps> = ({
           {getPhaseDisplay()}
         </div>
         {getGameStatus()}
+        
+        {!gameState.game_over && gameState.turn_time_remaining !== undefined && gameState.turn_time_remaining !== null && (
+          <div className={`turn-timer ${(gameState.turn_time_remaining || 0) <= 10 ? 'urgent' : ''}`}>
+            Time: {gameState.turn_time_remaining || 0}s
+          </div>
+        )}
       </div>
 
       <div className="players-section">

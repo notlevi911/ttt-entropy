@@ -8,13 +8,18 @@ import string
 import asyncio
 from typing import Dict, List, Optional
 from datetime import datetime
+import time
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = FastAPI()
 
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # React dev server
+    allow_origins=[os.getenv("FRONTEND_URL", "http://localhost:3000")],  # React dev server
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -36,6 +41,8 @@ class Game:
         self.winner = None
         self.game_over = False
         self.play_again_votes = [False, False]  # Track play again votes
+        self.turn_start_time = None  # Don't start timer until 2 players join
+        self.turn_timeout = 30  # 30 seconds per turn
         
         # Auto-place center piece at start (but don't reveal it)
         self.board[4] = "placed"
@@ -69,6 +76,41 @@ class Game:
             probabilities.append((prob1, prob2))
         return probabilities
     
+    def reset_turn_timer(self):
+        """Reset the turn timer when turn changes"""
+        if self.turn_start_time is not None:  # Only reset if timer was already started
+            self.turn_start_time = time.time()
+    
+    def get_turn_time_remaining(self) -> int:
+        """Get remaining time for current turn in seconds"""
+        if self.turn_start_time is None:
+            return 0  # Timer not started yet
+        elapsed = time.time() - self.turn_start_time
+        remaining = max(0, self.turn_timeout - int(elapsed))
+        return remaining
+    
+    def is_turn_expired(self) -> bool:
+        """Check if current turn has timed out"""
+        return self.turn_start_time is not None and self.get_turn_time_remaining() <= 0
+    
+    def handle_turn_timeout(self):
+        """Handle turn timeout by switching to next player"""
+        if not self.game_over and self.is_turn_expired():
+            # Switch to next player
+            self.current_turn = 1 - self.current_turn
+            self.reset_turn_timer()
+            return True
+        return False
+    
+    def start_timer(self):
+        """Start the turn timer for the first time"""
+        if self.turn_start_time is None:
+            self.turn_start_time = time.time()
+    
+    def stop_timer(self):
+        """Stop the turn timer (when players leave)"""
+        self.turn_start_time = None
+
     def place_piece(self, position: int) -> bool:
         """Place a piece during placement phase"""
         if self.phase != "placement" or self.board[position] is not None or position == 4:
@@ -81,6 +123,7 @@ class Game:
         if self.placed_pieces == 9:
             self.phase = "reveal"
             self.current_turn = 0  # Reset turn for reveal phase
+            self.reset_turn_timer()  # Reset timer for reveal phase
         
         return True
     
@@ -182,7 +225,9 @@ class Game:
             "winner": self.winner,
             "game_over": self.game_over,
             "player_id": player_id,
-            "play_again_votes": self.play_again_votes
+            "play_again_votes": self.play_again_votes,
+            "turn_time_remaining": self.get_turn_time_remaining() if self.turn_start_time is not None else None,
+            "turn_timeout": self.turn_timeout
         }
 
 def generate_room_code() -> str:
@@ -243,8 +288,14 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str):
     })
     connections[room_code].append(websocket)
     
-    # Send initial game state
+    # Get game instance
     game = rooms[room_code]["game"]
+    
+    # Start timer if this is the second player
+    if len(rooms[room_code]["players"]) == 2:
+        game.start_timer()
+    
+    # Send initial game state
     await websocket.send_json({
         "type": "game_state",
         "data": game.get_state(player_id),
@@ -277,6 +328,10 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str):
     finally:
         # Handle player disconnect
         if room_code in rooms:
+            # Stop timer if player count drops below 2
+            if len(rooms[room_code]["players"]) >= 2:
+                rooms[room_code]["game"].stop_timer()
+            
             # Remove player from room
             rooms[room_code]["players"] = [p for p in rooms[room_code]["players"] if p["id"] != player_id]
             connections[room_code] = [conn for conn in connections[room_code] if conn != websocket]
@@ -312,6 +367,7 @@ async def handle_message(room_code: str, player_id: int, message: dict):
         position = message.get("position")
         if game.current_turn == player_id and game.place_piece(position):
             game.current_turn = 1 - game.current_turn  # Switch turns
+            game.reset_turn_timer()  # Reset timer for new turn
             
             # Broadcast updated game state
             await broadcast_game_state(room_code)
@@ -320,6 +376,7 @@ async def handle_message(room_code: str, player_id: int, message: dict):
         position = message.get("position")
         if game.current_turn == player_id and game.reveal_piece(position):
             game.current_turn = 1 - game.current_turn  # Switch turns
+            game.reset_turn_timer()  # Reset timer for new turn
             
             # Broadcast updated game state
             await broadcast_game_state(room_code)
@@ -399,6 +456,47 @@ async def create_room():
     """Create a new room and return the room code"""
     room_code = generate_room_code()
     return {"room_code": room_code}
+
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(timer_update_loop())
+
+async def timer_update_loop():
+    """Periodically update turn timers for all active games"""
+    while True:
+        await asyncio.sleep(1)  # Update every second
+        
+        for room_code, room_data in rooms.items():
+            game = room_data["game"]
+            
+            if (game.turn_start_time is not None and 
+                not game.game_over and 
+                len(room_data["players"]) == 2):
+                
+                remaining_time = game.get_turn_time_remaining()
+                
+                # Check if time's up
+                if remaining_time <= 0:
+                    # Handle timeout
+                    timed_out = game.handle_turn_timeout()
+                    if timed_out:
+                        # Broadcast timeout message
+                        for player in room_data["players"]:
+                            try:
+                                await player["websocket"].send_json({
+                                    "type": "timeout",
+                                    "data": {
+                                        "message": f"Turn timeout! Player {2 - game.current_turn} ran out of time."
+                                    }
+                                })
+                            except:
+                                pass
+                        
+                        # Broadcast updated game state
+                        await broadcast_game_state(room_code)
+                else:
+                    # Send periodic updates
+                    await broadcast_game_state(room_code)
 
 if __name__ == "__main__":
     import uvicorn

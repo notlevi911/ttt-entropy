@@ -31,24 +31,14 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ messages, onSendMessage, currentP
   };
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>): void => {
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
       handleSendMessage();
     }
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
     setInputMessage(e.target.value);
-  };
-
-  const formatTimestamp = (timestamp?: string): string => {
-    if (!timestamp) return '';
-    
-    try {
-      const date = new Date(timestamp);
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    } catch {
-      return '';
-    }
   };
 
   const getMessageClass = (message: WebSocketMessage): string => {
@@ -59,13 +49,13 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ messages, onSendMessage, currentP
   return (
     <div className="chat-panel">
       <div className="chat-header">
-        <h3>💬 Chat</h3>
+        <h3>Chat</h3>
       </div>
 
       <div className="chat-messages">
         {messages.length === 0 ? (
           <div className="no-messages">
-            <p>No messages yet. Say hello! 👋</p>
+            <p>No messages yet. Say hello!</p>
           </div>
         ) : (
           messages.map((message, index) => (
@@ -73,9 +63,6 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ messages, onSendMessage, currentP
               <div className="message-header">
                 <span className="player-name">
                   {message.player_name || 'Unknown Player'}
-                </span>
-                <span className="message-time">
-                  {formatTimestamp(message.timestamp)}
                 </span>
               </div>
               <div className="message-content">
@@ -103,7 +90,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ messages, onSendMessage, currentP
           disabled={!inputMessage.trim()}
           className="send-button"
         >
-          📤
+          SEND
         </button>
       </div>
     </div>

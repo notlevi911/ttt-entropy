@@ -8,6 +8,8 @@ export interface GameState {
   game_over: boolean;
   player_id: number;
   play_again_votes?: boolean[];
+  turn_time_remaining?: number;
+  turn_timeout?: number;
 }
 
 export interface Player {
