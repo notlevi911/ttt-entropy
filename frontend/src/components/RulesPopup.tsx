@@ -43,7 +43,7 @@ const RulesPopup: React.FC<RulesPopupProps> = ({ isOpen, onClose }) => {
             <ul>
               <li>Players take turns revealing pieces</li>
               <li>Revealed symbols help identify which % is X/O</li>
-              <li>Probabilities update after each reveal</li>
+              <li>Probabilities update following Monty Hall theorem to determine percentages</li>
               <li>First to get 3 in a row wins</li>
               <li>If all revealed with no winner → draw</li>
             </ul>

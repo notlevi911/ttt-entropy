@@ -19,8 +19,8 @@ The key challenge is using probability information and deduction to make strateg
 - 3x3 grid with 9 total pieces
 - Exactly 5 of one symbol, 4 of the other
 - Players don't know which symbol they need
-- Each piece displays probability percentages
-- Probabilities update after each reveal
+- Each piece displays probability percentages (randomly assigned which number represents X or O)
+- Probabilities update after each reveal following Monty Hall theorem to determine the new percentages
 - Win by getting 3 symbols in a row, column, or diagonal
 - Two phases: placement then reveal
 

@@ -40,6 +40,28 @@ function App(): JSX.Element {
           />
         )}
       </main>
+      
+      <footer style={{ 
+        position: 'fixed', 
+        bottom: '10px', 
+        left: '10px', 
+        fontSize: '12px', 
+        color: '#666',
+        zIndex: 1000
+      }}>
+        made with love from <a 
+          href="/blog.html" 
+          target="_blank"
+          style={{ 
+            color: '#007bff', 
+            textDecoration: 'none' 
+          }}
+          onMouseOver={(e) => (e.target as HTMLAnchorElement).style.textDecoration = 'underline'}
+          onMouseOut={(e) => (e.target as HTMLAnchorElement).style.textDecoration = 'none'}
+        >
+          levi
+        </a>
+      </footer>
     </div>
   );
 }

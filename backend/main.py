@@ -35,6 +35,8 @@ class Game:
     def __init__(self):
         self.board = [None] * 9  # 9 cells, None means empty
         self.hidden_symbols = self._generate_hidden_symbols()
+        # Randomly decide if first number shows X or O probability
+        self.first_number_is_x = random.choice([True, False])
         self.probabilities = self._generate_probabilities()
         self.phase = "placement"  # "placement" or "reveal"
         self.current_turn = 0  # 0 or 1 for player index
@@ -68,14 +70,19 @@ class Game:
             # Generate probabilities biased toward actual symbol
             actual_symbol = self.hidden_symbols[i]
             if actual_symbol == 'X':
-                # X is the actual symbol, so first probability is higher
-                prob1 = random.randint(60, 95)
-                prob2 = 100 - prob1
+                # X is the actual symbol, so X probability is higher
+                x_prob = random.randint(60, 95)
+                o_prob = 100 - x_prob
             else:
-                # O is the actual symbol, so second probability is higher
-                prob2 = random.randint(60, 95)
-                prob1 = 100 - prob2
-            probabilities.append((prob1, prob2))
+                # O is the actual symbol, so O probability is higher
+                o_prob = random.randint(60, 95)
+                x_prob = 100 - o_prob
+            
+            # Randomly arrange which probability comes first based on game setting
+            if self.first_number_is_x:
+                probabilities.append((x_prob, o_prob))
+            else:
+                probabilities.append((o_prob, x_prob))
         return probabilities
     
     def reset_turn_timer(self):
@@ -157,32 +164,74 @@ class Game:
         return True
     
     def _update_probabilities_after_reveal(self, revealed_symbol: str):
-        """Update probabilities based on revealed information"""
-        # Count remaining symbols
+        """Update probabilities using Monty Hall-style logic"""
+        # Get lines containing the last revealed piece
+        last_revealed = next(i for i in range(9) if self.revealed_cells[i] and self.board[i] == revealed_symbol)
+        
+        # Define all possible lines (rows, columns, diagonals)
+        lines = [
+            [0, 1, 2], [3, 4, 5], [6, 7, 8],  # rows
+            [0, 3, 6], [1, 4, 7], [2, 5, 8],  # columns
+            [0, 4, 8], [2, 4, 6]  # diagonals
+        ]
+        
+        # Count remaining symbols globally
         remaining_x = sum(1 for i, symbol in enumerate(self.hidden_symbols) 
                          if not self.revealed_cells[i] and symbol == 'X')
         remaining_o = sum(1 for i, symbol in enumerate(self.hidden_symbols) 
                          if not self.revealed_cells[i] and symbol == 'O')
         
         total_remaining = remaining_x + remaining_o
-        
         if total_remaining == 0:
             return
+            
+        # Base probabilities
+        base_x_prob = remaining_x / total_remaining
+        base_o_prob = remaining_o / total_remaining
         
-        # Update probabilities for unrevealed pieces
+        # Apply Monty Hall logic: pieces in same lines as revealed pieces get probability boosts
         for i in range(9):
             if not self.revealed_cells[i]:
-                actual_symbol = self.hidden_symbols[i]
-                if actual_symbol == 'X':
-                    # This piece is actually X
-                    x_prob = max(10, min(90, int((remaining_x / total_remaining) * 100) + random.randint(-15, 15)))
-                    o_prob = 100 - x_prob
-                else:
-                    # This piece is actually O
-                    o_prob = max(10, min(90, int((remaining_o / total_remaining) * 100) + random.randint(-15, 15)))
-                    x_prob = 100 - o_prob
+                # Start with base probability
+                x_prob = base_x_prob
+                o_prob = base_o_prob
                 
-                self.probabilities[i] = (x_prob, o_prob)
+                # Check if this cell shares lines with revealed pieces
+                monty_hall_boost = 0
+                for line in lines:
+                    if i in line:
+                        # Count revealed pieces in this line
+                        revealed_in_line = sum(1 for pos in line if self.revealed_cells[pos])
+                        same_symbol_in_line = sum(1 for pos in line 
+                                                if self.revealed_cells[pos] and self.board[pos] == revealed_symbol)
+                        
+                        if revealed_in_line > 0:
+                            # Monty Hall effect: knowing one door increases odds on remaining doors
+                            if same_symbol_in_line > 0:
+                                # If revealed symbol appears in this line, boost that symbol's probability
+                                if revealed_symbol == 'X':
+                                    monty_hall_boost += 0.15 * (same_symbol_in_line / 3)
+                                else:
+                                    monty_hall_boost -= 0.15 * (same_symbol_in_line / 3)
+                
+                # Apply the boost
+                if revealed_symbol == 'X':
+                    x_prob = min(0.9, x_prob + monty_hall_boost)
+                    o_prob = 1.0 - x_prob
+                else:
+                    o_prob = min(0.9, o_prob + monty_hall_boost)
+                    x_prob = 1.0 - o_prob
+                
+                # Add small random variation to maintain some uncertainty
+                noise = random.randint(-5, 5) / 100.0
+                x_prob = max(0.1, min(0.9, x_prob + noise))
+                o_prob = 1.0 - x_prob
+                
+                # Arrange probabilities based on game's random assignment
+                if self.first_number_is_x:
+                    self.probabilities[i] = (int(x_prob * 100), int(o_prob * 100))
+                else:
+                    self.probabilities[i] = (int(o_prob * 100), int(x_prob * 100))
     
     def _check_win_condition(self):
         """Check if there's a winner"""

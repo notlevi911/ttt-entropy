@@ -91,6 +91,7 @@ const Lobby: React.FC<LobbyProps> = ({ onJoinRoom }) => {
             <li>Each piece shows probability percentages, but you don't know which is yours</li>
             <li>Placement Phase: Take turns placing all 9 pieces</li>
             <li>Reveal Phase: Take turns revealing pieces to find 3-in-a-row</li>
+            <li>Probabilities update following Monty Hall theorem to determine percentages</li>
             <li>Win by getting 3 of your symbol in a row, column, or diagonal</li>
           </ul>
         </div>
