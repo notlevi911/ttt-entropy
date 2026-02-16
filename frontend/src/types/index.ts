@@ -10,6 +10,12 @@ export interface GameState {
   play_again_votes?: boolean[];
   turn_time_remaining?: number;
   turn_timeout?: number;
+  monty_hall_state?: {
+    player_id: number;
+    original_position: number;
+    monty_position: number;
+    monty_symbol: string;
+  } | null;
 }
 
 export interface Player {
@@ -32,4 +38,16 @@ export interface WebSocketMessage {
   player_name?: string;
   message?: string;
   timestamp?: string;
+  // Monty Hall specific properties
+  original_position?: number;
+  revealed_position?: number;
+  revealed_symbol?: string;
+  monty_symbol?: string;
+  monty_position?: number;
+  piece_type?: string;
+  strategy_hint?: string;
+  private_reveal?: boolean;
+  public_reveal?: boolean;
+  position?: number;
+  symbol?: string;
 }

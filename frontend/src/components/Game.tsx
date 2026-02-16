@@ -136,6 +136,27 @@ const Game: React.FC<GameProps> = ({ roomCode, playerName, onBackToLobby }) => {
         setChatMessages(prev => [...prev, message]);
         break;
 
+      case 'private_info':
+        if (message.message) {
+          addNotification(message.message, 'info');
+        }
+        break;
+
+      case 'choice_info':
+        if (message.message) {
+          addNotification(message.message, 'success');
+        }
+        break;
+
+      case 'monty_hall_info':
+        if (message.monty_symbol && message.piece_type && message.strategy_hint) {
+          addNotification(
+            `🎯 Private reveal: ${message.monty_symbol} (${message.piece_type} piece). ${message.strategy_hint}`,
+            'info'
+          );
+        }
+        break;
+
       case 'error':
         setErrorMessage(message.message || 'An error occurred');
         setConnectionStatus('error');

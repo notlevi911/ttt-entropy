@@ -57,16 +57,27 @@ const GameBoard: React.FC<GameBoardProps> = ({
       classes.push(`revealed-${gameState.board[position]?.toLowerCase()}`);
     }
 
-    // Add clickable class if it's the player's turn and a valid move
-    if (isMyTurn) {
-      if (gameState.phase === 'placement' && gameState.board[position] === null) {
+    // Handle Monty Hall state visual indicators
+    if (gameState.monty_hall_state && isMyTurn) {
+      if (position === gameState.monty_hall_state.original_position) {
+        classes.push('monty-original');
         classes.push('clickable');
-      } else if (
-        gameState.phase === 'reveal' && 
-        gameState.board[position] === 'placed' && 
-        !gameState.revealed_cells[position]
-      ) {
+      } else if (position === gameState.monty_hall_state.monty_position) {
+        classes.push('monty-choice');
         classes.push('clickable');
+      }
+    } else {
+      // Normal game logic when not in Monty Hall state
+      if (isMyTurn) {
+        if (gameState.phase === 'placement' && gameState.board[position] === null) {
+          classes.push('clickable');
+        } else if (
+          gameState.phase === 'reveal' && 
+          gameState.board[position] === 'placed' && 
+          !gameState.revealed_cells[position]
+        ) {
+          classes.push('clickable');
+        }
       }
     }
 
@@ -120,13 +131,19 @@ const GameBoard: React.FC<GameBoardProps> = ({
       </div>
 
       <div className="game-instructions">
-        {gameState.phase === 'placement' && !gameState.game_over && (
+        {gameState.monty_hall_state && isMyTurn && (
+          <div className="monty-hall-instructions">
+            <p><strong>MONTY HALL TRIGGERED!</strong></p>
+            <p>Green box contains: <strong>{gameState.monty_hall_state.monty_symbol}</strong></p>
+          </div>
+        )}
+        {!gameState.monty_hall_state && gameState.phase === 'placement' && !gameState.game_over && (
           <p>
             <strong>Placement Phase:</strong> Click empty cells to place pieces
             {!isMyTurn && ' (waiting for other player)'}
           </p>
         )}
-        {gameState.phase === 'reveal' && !gameState.game_over && (
+        {!gameState.monty_hall_state && gameState.phase === 'reveal' && !gameState.game_over && (
           <p>
             <strong>Reveal Phase:</strong> Click pieces to reveal their symbols
             {!isMyTurn && ' (waiting for other player)'}

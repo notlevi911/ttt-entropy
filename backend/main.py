@@ -47,6 +47,9 @@ class Game:
         self.play_again_votes = [False, False]  # Track play again votes
         self.turn_start_time = None  # Don't start timer until 2 players join
         self.turn_timeout = 30  # 30 seconds per turn
+        self.last_monty_position = None  # Store Monty Hall position for choice
+        self.player_turn_counts = [0, 0]  # Track turn counts for each player
+        self.monty_hall_state = None  # Track active Monty Hall state
         
         # Auto-place center piece at start (but don't reveal it)
         self.board[4] = "placed"
@@ -136,13 +139,181 @@ class Game:
         
         return True
     
-    def reveal_piece(self, position: int) -> bool:
-        """Reveal a piece during reveal phase"""
+    def reveal_piece(self, position: int, player_id: int = None) -> dict:
+        """Reveal a piece during reveal phase with Monty Hall mechanism"""
         if (self.phase != "reveal" or 
             self.board[position] is None or 
             self.revealed_cells[position]):
-            return False
+            return {"success": False, "error": "Invalid reveal"}
         
+        # If we're in active Monty Hall state, handle the choice
+        if self.monty_hall_state and self.monty_hall_state["player_id"] == player_id:
+            if position == self.monty_hall_state["original_position"]:
+                # Player clicked their original tile - private reveal
+                result = self._complete_private_reveal(position)
+                self.monty_hall_state = None  # Clear Monty Hall state
+                return result
+            elif position == self.monty_hall_state["monty_position"]:
+                # Player clicked Monty Hall tile - public reveal
+                result = self._complete_public_reveal(position)
+                self.monty_hall_state = None  # Clear Monty Hall state
+                return result
+            else:
+                return {"success": False, "error": "Invalid choice during Monty Hall"}
+        
+        # Increment player's turn count
+        if player_id is not None:
+            self.player_turn_counts[player_id] += 1
+        
+        # Store original choice
+        original_symbol = self.hidden_symbols[position]
+        
+        # Check if this is player's 2nd, 4th, 6th turn etc. (every even turn)
+        should_trigger_monty = (player_id is not None and 
+                               self.player_turn_counts[player_id] % 2 == 0)
+        
+        if should_trigger_monty:
+            # Trigger Monty Hall on every 2nd turn
+            monty_hall_result = self._trigger_monty_hall(position, original_symbol)
+            
+            if monty_hall_result["triggered"]:
+                # Store Monty Hall state
+                self.monty_hall_state = {
+                    "player_id": player_id,
+                    "original_position": position,
+                    "monty_position": monty_hall_result["revealed_position"],
+                    "monty_symbol": monty_hall_result["revealed_symbol"]
+                }
+                
+                return {
+                    "success": True,
+                    "monty_hall_active": True,
+                    "original_position": position,
+                    "monty_position": monty_hall_result["revealed_position"],
+                    "monty_symbol": monty_hall_result["revealed_symbol"],
+                    "piece_type": monty_hall_result["piece_type"],
+                    "strategy_hint": monty_hall_result["strategy_hint"]
+                }
+        
+        # Standard reveal (no Monty Hall or fallback)
+        return self._complete_public_reveal(position)
+    
+    def make_monty_hall_choice(self, original_position: int, choice: str) -> dict:
+        """Handle player's choice in Monty Hall scenario"""
+        if choice == "original":
+            # Player chose their original tile - they get private knowledge
+            # Tile stays hidden to opponent but player knows what it contains
+            original_symbol = self.hidden_symbols[original_position]
+            return {
+                "success": True,
+                "monty_hall": False,
+                "private_reveal": True,
+                "position": original_position,
+                "symbol": original_symbol,
+                "message": f"You privately learned this tile contains {original_symbol}"
+            }
+        elif choice == "monty":
+            # Player chose Monty Hall tile - reveal it publicly to both players
+            monty_position = self.last_monty_position  # We need to store this
+            monty_symbol = self.hidden_symbols[monty_position]
+            
+            # Actually reveal the Monty Hall tile publicly
+            self.revealed_cells[monty_position] = True
+            self.board[monty_position] = monty_symbol
+            
+            # Update probabilities
+            self._update_probabilities_after_reveal(monty_symbol)
+            
+            # Check for win condition
+            self._check_win_condition()
+            
+            # Check for draw
+            if all(self.revealed_cells) and not self.winner:
+                self.game_over = True
+                
+            # If game is over, reveal all pieces
+            if self.game_over:
+                self._reveal_all_pieces()
+            
+            return {
+                "success": True,
+                "monty_hall": False,
+                "public_reveal": True,
+                "position": monty_position,
+                "symbol": monty_symbol,
+                "message": f"Monty Hall tile revealed: {monty_symbol}"
+            }
+        
+    def _trigger_monty_hall(self, chosen_position: int, chosen_symbol: str) -> dict:
+        """Trigger Monty Hall mechanism - returns info but doesn't reveal publicly"""
+        # Define all possible lines
+        lines = [
+            [0, 1, 2], [3, 4, 5], [6, 7, 8],  # rows
+            [0, 3, 6], [1, 4, 7], [2, 5, 8],  # columns
+            [0, 4, 8], [2, 4, 6]  # diagonals
+        ]
+        
+        # Find lines containing the chosen position and try all of them
+        relevant_lines = [line for line in lines if chosen_position in line]
+        
+        if not relevant_lines:
+            return {"triggered": False}
+        
+        # Try each line until we find candidates
+        all_candidates = []
+        for line in relevant_lines:
+            candidates = [pos for pos in line 
+                         if pos != chosen_position and not self.revealed_cells[pos]]
+            all_candidates.extend(candidates)
+        
+        # Remove duplicates
+        all_candidates = list(set(all_candidates))
+        
+        if not all_candidates:
+            return {"triggered": False}
+        
+        # Apply 80/20 rule for symbol selection
+        opposite_symbol = 'O' if chosen_symbol == 'X' else 'X'
+        
+        # Separate candidates by symbol
+        opposite_candidates = [pos for pos in all_candidates 
+                             if self.hidden_symbols[pos] == opposite_symbol]
+        same_candidates = [pos for pos in all_candidates 
+                          if self.hidden_symbols[pos] == chosen_symbol]
+        
+        # 80% chance to reveal opposite, 20% chance to reveal same
+        if random.randint(1, 100) <= 80 and opposite_candidates:
+            reveal_position = random.choice(opposite_candidates)
+        elif same_candidates:
+            reveal_position = random.choice(same_candidates)
+        elif opposite_candidates:
+            reveal_position = random.choice(opposite_candidates)
+        else:
+            # Fallback: just pick any available candidate
+            reveal_position = random.choice(all_candidates)
+        
+        # DON'T actually reveal the piece publicly - just return the info
+        revealed_symbol = self.hidden_symbols[reveal_position]
+        
+        # Store the Monty Hall position for later choice
+        self.last_monty_position = reveal_position
+        
+        # Determine if this is beneficial or detrimental for the player
+        is_beneficial = revealed_symbol != chosen_symbol
+        piece_type = "winning" if is_beneficial else "losing"
+        strategy_hint = "This makes switching more favorable" if is_beneficial else "This makes staying more favorable"
+        
+        return {
+            "triggered": True,
+            "revealed_position": reveal_position,
+            "revealed_symbol": revealed_symbol,
+            "piece_type": piece_type,
+            "strategy_hint": strategy_hint
+        }
+    
+    def _complete_private_reveal(self, position: int) -> dict:
+        """Complete reveal of original tile (public reveal, but player had private info to make choice)"""
+        # Actually reveal the tile publicly - both players see it
         self.revealed_cells[position] = True
         revealed_symbol = self.hidden_symbols[position]
         self.board[position] = revealed_symbol
@@ -161,7 +332,40 @@ class Game:
         if self.game_over:
             self._reveal_all_pieces()
         
-        return True
+        return {
+            "success": True,
+            "public_reveal": True,  # Changed to public_reveal
+            "position": position,
+            "symbol": revealed_symbol,
+            "message": f"You chose your original tile: {revealed_symbol}"
+        }
+    
+    def _complete_public_reveal(self, position: int) -> dict:
+        """Complete a public reveal (tile gets revealed to everyone)"""
+        self.revealed_cells[position] = True
+        revealed_symbol = self.hidden_symbols[position]
+        self.board[position] = revealed_symbol
+        
+        # Update probabilities for remaining hidden pieces
+        self._update_probabilities_after_reveal(revealed_symbol)
+        
+        # Check for win condition
+        self._check_win_condition()
+        
+        # Check for draw (all revealed, no winner)
+        if all(self.revealed_cells) and not self.winner:
+            self.game_over = True
+        
+        # If game is over, reveal all pieces
+        if self.game_over:
+            self._reveal_all_pieces()
+        
+        return {
+            "success": True,
+            "public_reveal": True,
+            "position": position,
+            "symbol": revealed_symbol
+        }
     
     def _update_probabilities_after_reveal(self, revealed_symbol: str):
         """Update probabilities using Monty Hall-style logic"""
@@ -222,7 +426,20 @@ class Game:
                     o_prob = min(0.9, o_prob + monty_hall_boost)
                     x_prob = 1.0 - o_prob
                 
-                # Add small random variation to maintain some uncertainty
+                # Add bias toward the actual symbol in this cell (like placement phase)
+                actual_symbol = self.hidden_symbols[i]
+                if actual_symbol == 'X':
+                    # This cell actually contains X, boost X probability
+                    symbol_bias = random.randint(10, 25) / 100.0  # 10-25% bias
+                    x_prob = min(0.9, x_prob + symbol_bias)
+                    o_prob = 1.0 - x_prob
+                else:
+                    # This cell actually contains O, boost O probability  
+                    symbol_bias = random.randint(10, 25) / 100.0  # 10-25% bias
+                    o_prob = min(0.9, o_prob + symbol_bias)
+                    x_prob = 1.0 - o_prob
+                
+                # Add small random noise to maintain some uncertainty
                 noise = random.randint(-5, 5) / 100.0
                 x_prob = max(0.1, min(0.9, x_prob + noise))
                 o_prob = 1.0 - x_prob
@@ -278,7 +495,8 @@ class Game:
             "player_id": player_id,
             "play_again_votes": self.play_again_votes,
             "turn_time_remaining": self.get_turn_time_remaining() if self.turn_start_time is not None else None,
-            "turn_timeout": self.turn_timeout
+            "turn_timeout": self.turn_timeout,
+            "monty_hall_state": self.monty_hall_state if self.monty_hall_state and self.monty_hall_state["player_id"] == player_id else None
         }
 
 def generate_room_code() -> str:
@@ -425,12 +643,39 @@ async def handle_message(room_code: str, player_id: int, message: dict):
     
     elif msg_type == "reveal_piece":
         position = message.get("position")
-        if game.current_turn == player_id and game.reveal_piece(position):
-            game.current_turn = 1 - game.current_turn  # Switch turns
-            game.reset_turn_timer()  # Reset timer for new turn
-            
-            # Broadcast updated game state
-            await broadcast_game_state(room_code)
+        if game.current_turn == player_id:
+            result = game.reveal_piece(position, player_id)
+            if result["success"]:
+                if result.get("monty_hall_active"):
+                    # Monty Hall is now active - broadcast to current player only to show the choice
+                    player_ws = next((p["websocket"] for p in rooms[room_code]["players"] if p["id"] == player_id), None)
+                    if player_ws:
+                        await player_ws.send_json({
+                            "type": "monty_hall_info",
+                            "monty_position": result["monty_position"],
+                            "monty_symbol": result["monty_symbol"],
+                            "piece_type": result["piece_type"],
+                            "strategy_hint": result["strategy_hint"]
+                        })
+                    # Broadcast game state to show visual indicators
+                    await broadcast_game_state(room_code)
+                elif result.get("private_reveal"):
+                    # Original tile chosen - public reveal but send notification to current player only
+                    player_ws = next((p["websocket"] for p in rooms[room_code]["players"] if p["id"] == player_id), None)
+                    if player_ws:
+                        await player_ws.send_json({
+                            "type": "choice_info", 
+                            "message": result["message"]
+                        })
+                    # Switch turns and broadcast
+                    game.current_turn = 1 - game.current_turn
+                    game.reset_turn_timer()
+                    await broadcast_game_state(room_code)
+                elif result.get("public_reveal"):
+                    # Public reveal - switch turns and broadcast
+                    game.current_turn = 1 - game.current_turn
+                    game.reset_turn_timer()
+                    await broadcast_game_state(room_code)
     
     elif msg_type == "chat_message":
         player_name = next((p["name"] for p in rooms[room_code]["players"] if p["id"] == player_id), f"Player {player_id + 1}")

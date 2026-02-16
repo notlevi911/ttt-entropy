@@ -89,9 +89,14 @@ const Lobby: React.FC<LobbyProps> = ({ onJoinRoom }) => {
           <ul>
             <li>3×3 board with 9 hidden pieces (5 of one symbol, 4 of another)</li>
             <li>Each piece shows probability percentages, but you don't know which is yours</li>
-            <li>Placement Phase: Take turns placing all 9 pieces</li>
-            <li>Reveal Phase: Take turns revealing pieces to find 3-in-a-row</li>
-            <li>Probabilities update following Monty Hall theorem to determine percentages</li>
+            <li><strong>Placement Phase:</strong> Take turns placing all 9 pieces</li>
+            <li><strong>Reveal Phase:</strong> Take turns revealing pieces to find 3-in-a-row</li>
+            <li><strong>Monty Hall Triggers:</strong> Every 2nd turn during reveal phase</li>
+            <li>• Choose your original piece → system privately reveals one piece</li>
+            <li>• 80% chance to show a piece that makes switching better</li>
+            <li>• 20% chance to show a piece that makes staying better</li>
+            <li>• You can stick with original or switch to any unrevealed piece</li>
+            <li>• Switching gives ~67% chance vs ~33% for staying (on average)</li>
             <li>Win by getting 3 of your symbol in a row, column, or diagonal</li>
           </ul>
         </div>

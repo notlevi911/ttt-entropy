@@ -1138,3 +1138,153 @@ main {
     min-width: auto;
   }
 }
+
+/* Monty Hall Popup Styles */
+.monty-hall-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 2000;
+}
+
+.monty-hall-popup {
+  background: #1a1a1a;
+  border: 2px solid #00ff00;
+  border-radius: 12px;
+  padding: 2rem;
+  max-width: 500px;
+  width: 90%;
+  box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+}
+
+.monty-hall-header {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.monty-hall-header h3 {
+  color: #00ff00;
+  font-size: 1.2rem;
+  margin: 0;
+  text-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+}
+
+.monty-hall-content {
+  color: #ffffff;
+  text-align: center;
+}
+
+.monty-hall-content p {
+  margin-bottom: 1rem;
+  line-height: 1.6;
+}
+
+.revealed-info {
+  background: #0f0f0f;
+  border: 1px solid #00ff00;
+  border-radius: 8px;
+  padding: 1rem;
+  margin: 1.5rem 0;
+}
+
+.revealed-info strong {
+  color: #00ff00;
+  font-size: 1.1rem;
+}
+
+.monty-hall-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
+.choice-btn {
+  background: #1a1a1a;
+  color: #ffffff;
+  border: 2px solid #ffffff;
+  border-radius: 8px;
+  padding: 1rem;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.original-btn:hover {
+  background: #0066ff;
+  border-color: #0066ff;
+  color: #000000;
+  box-shadow: 0 0 15px rgba(0, 102, 255, 0.4);
+  transform: translateY(-2px);
+}
+
+.monty-btn:hover {
+  background: #00ff00;
+  border-color: #00ff00;
+  color: #000000;
+  box-shadow: 0 0 15px rgba(0, 255, 0, 0.4);
+  transform: translateY(-2px);
+}
+
+.choice-desc {
+  font-size: 0.6rem;
+  opacity: 0.8;
+  font-weight: normal;
+}
+
+/* Monty Hall In-Game Styles */
+.monty-original {
+  border: 3px solid #0066ff !important;
+  box-shadow: 0 0 15px rgba(0, 102, 255, 0.6);
+  animation: pulse-blue 1s infinite alternate;
+}
+
+.monty-choice {
+  border: 3px solid #00ff00 !important;
+  box-shadow: 0 0 15px rgba(0, 255, 0, 0.6);
+  animation: pulse-green 1s infinite alternate;
+}
+
+.monty-hall-instructions {
+  background: #0f0f0f;
+  border: 2px solid #00ff00;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+.monty-hall-instructions p {
+  margin: 0.5rem 0;
+  color: #ffffff;
+}
+
+.original-choice {
+  color: #0066ff;
+  font-weight: bold;
+}
+
+.monty-choice {
+  color: #00ff00;
+  font-weight: bold;
+}
+
+@keyframes pulse-blue {
+  0% { box-shadow: 0 0 15px rgba(0, 102, 255, 0.6); }
+  100% { box-shadow: 0 0 25px rgba(0, 102, 255, 0.9); }
+}
+
+@keyframes pulse-green {
+  0% { box-shadow: 0 0 15px rgba(0, 255, 0, 0.6); }
+  100% { box-shadow: 0 0 25px rgba(0, 255, 0, 0.9); }
+}
