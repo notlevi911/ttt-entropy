@@ -43,6 +43,25 @@ const Lobby: React.FC<LobbyProps> = ({ onJoinRoom }) => {
     }
   };
 
+  const createAIRoom = async (): Promise<void> => {
+    setIsCreating(true);
+    try {
+      const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
+      const response = await fetch(`${backendUrl}/create_ai_room?difficulty=expert`);
+      const data = await response.json();
+      
+      if (data.room_code) {
+        // Directly join the AI room
+        onJoinRoom(data.room_code, playerName.trim() || 'Player');
+      }
+    } catch (error) {
+      console.error('Error creating AI room:', error);
+      addNotification('Failed to create AI game. Please try again.', 'error');
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
   const copyRoomCode = (): void => {
     navigator.clipboard.writeText(createdRoomCode);
     addNotification('Room code copied to clipboard!', 'success');
@@ -102,8 +121,29 @@ const Lobby: React.FC<LobbyProps> = ({ onJoinRoom }) => {
         </div>
 
         <div className="lobby-actions">
+          <div className="play-vs-ai-section">
+            <h3>Play vs AI</h3>
+            <div className="input-group">
+              <input
+                type="text"
+                placeholder="Enter your name"
+                value={playerName}
+                onChange={handlePlayerNameChange}
+                className="player-name-input"
+                maxLength={20}
+              />
+            </div>
+            <button 
+              onClick={() => createAIRoom()}
+              disabled={isCreating || !playerName.trim()}
+              className="ai-btn"
+            >
+              Play vs AI
+            </button>
+          </div>
+
           <div className="create-room-section">
-            <h3>Create New Room</h3>
+            <h3>Create Room</h3>
             <button 
               onClick={createRoom} 
               disabled={isCreating}
@@ -121,12 +161,13 @@ const Lobby: React.FC<LobbyProps> = ({ onJoinRoom }) => {
                     Copy
                   </button>
                 </div>
+                <p className="share-instruction">Share this code with another player</p>
               </div>
             )}
           </div>
 
           <div className="join-room-section">
-            <h3>Join Existing Room</h3>
+            <h3>🚪 Join Room</h3>
             <div className="input-group">
               <input
                 type="text"

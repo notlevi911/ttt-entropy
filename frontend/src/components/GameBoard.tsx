@@ -25,6 +25,15 @@ const GameBoard: React.FC<GameBoardProps> = ({
     if (!roomInfo || roomInfo.waiting_for_player) {
       return false;
     }
+    
+    // Check if it's AI's turn
+    if (roomInfo.ai_mode) {
+      const currentTurnPlayer = roomInfo.players.find(p => p.id === gameState.current_turn);
+      if (currentTurnPlayer?.is_ai) {
+        return false; // Can't interact when it's AI's turn
+      }
+    }
+    
     return isMyTurn && !gameState.game_over;
   };
 
@@ -170,7 +179,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
               </button>
             </div>
             
-            {gameState.play_again_votes && (
+            {gameState.play_again_votes && !roomInfo?.ai_mode && (
               <div className="play-again-status">
                 {gameState.play_again_votes.some((vote: boolean) => vote) && (
                   <p>Waiting for all players to vote for play again...</p>

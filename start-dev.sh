@@ -2,14 +2,14 @@
 
 # Start Entropy TicTacToe Development Servers
 
-echo "🎮 Starting Entropy TicTacToe Development Environment"
+echo "Starting Entropy TicTacToe Development Environment"
 echo "=================================================="
 
 # Function to check if port is in use
 check_port() {
     local port=$1
     if lsof -Pi :$port -sTCP:LISTEN -t >/dev/null 2>&1; then
-        echo "❌ Port $port is already in use"
+        echo "Port $port is already in use"
         return 1
     fi
     return 0
@@ -26,10 +26,10 @@ if ! check_port 3000; then
     exit 1
 fi
 
-echo "✅ Ports 8000 and 3000 are available"
+echo "Ports 8000 and 3000 are available"
 
 # Start backend in background
-echo "🚀 Starting FastAPI backend server..."
+echo "Starting FastAPI backend server..."
 cd backend
 python main.py &
 BACKEND_PID=$!
@@ -40,12 +40,12 @@ sleep 3
 
 # Check if backend started successfully
 if ! curl -s http://localhost:8000 >/dev/null; then
-    echo "❌ Failed to start backend server"
+    echo "Failed to start backend server"
     kill $BACKEND_PID 2>/dev/null
     exit 1
 fi
 
-echo "✅ Backend server running at http://localhost:8000"
+echo "Backend server running at http://localhost:8000"
 
 # Start frontend
 echo "🎨 Starting React frontend server..."
@@ -61,7 +61,7 @@ echo "📍 Access points:"
 echo "   Frontend: http://localhost:3000"
 echo "   Backend:  http://localhost:8000"
 echo ""
-echo "🎮 How to play:"
+echo "How to play:"
 echo "   1. Open http://localhost:3000 in two browser windows/tabs"
 echo "   2. Create a room in one window"
 echo "   3. Join the room from the second window"
@@ -75,7 +75,7 @@ cleanup() {
     echo "🛑 Shutting down servers..."
     kill $BACKEND_PID 2>/dev/null
     kill $FRONTEND_PID 2>/dev/null
-    echo "✅ Cleanup complete!"
+    echo "Cleanup complete!"
     exit 0
 }
 

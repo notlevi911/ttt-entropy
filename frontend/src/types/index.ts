@@ -21,12 +21,14 @@ export interface GameState {
 export interface Player {
   id: number;
   name: string;
+  is_ai?: boolean;
 }
 
 export interface RoomInfo {
   code: string;
   players: Player[];
   waiting_for_player?: boolean;
+  ai_mode?: boolean;
 }
 
 export interface WebSocketMessage {

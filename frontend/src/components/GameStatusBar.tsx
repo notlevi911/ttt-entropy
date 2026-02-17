@@ -50,12 +50,19 @@ const GameStatusBar: React.FC<GameStatusBarProps> = ({
     }
 
     const currentTurnPlayer = getCurrentTurnPlayer();
-    const turnText = isMyTurn ? 'Your Turn' : `${currentTurnPlayer?.name || 'Opponent'}'s Turn`;
+    const isAiTurn = currentTurnPlayer?.is_ai || false;
+    
+    let turnText;
+    if (isAiTurn) {
+      turnText = `${currentTurnPlayer?.name || 'AI'} is thinking...`;
+    } else {
+      turnText = isMyTurn ? 'Your Turn' : `${currentTurnPlayer?.name || 'Opponent'}'s Turn`;
+    }
     
     return (
-      <div className={`game-status ${isMyTurn ? 'my-turn' : 'opponent-turn'}`}>
+      <div className={`game-status ${isMyTurn ? 'my-turn' : isAiTurn ? 'ai-turn' : 'opponent-turn'}`}>
         <strong>{turnText}</strong>
-        {isMyTurn ? ' - Make your move!' : ' - Please wait...'}
+        {isMyTurn ? ' - Make your move!' : isAiTurn ? '' : ' - Please wait...'}
       </div>
     );
   };

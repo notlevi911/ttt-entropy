@@ -11,6 +11,7 @@ from datetime import datetime
 import time
 import os
 from dotenv import load_dotenv
+from vs_ai.ai_player import EntropyTicTacToeAI
 
 load_dotenv()
 
@@ -32,7 +33,7 @@ rooms: Dict[str, dict] = {}
 connections: Dict[str, List[WebSocket]] = {}
 
 class Game:
-    def __init__(self):
+    def __init__(self, ai_mode=False, ai_player_id=None, ai_difficulty="expert"):
         self.board = [None] * 9  # 9 cells, None means empty
         self.hidden_symbols = self._generate_hidden_symbols()
         # Randomly decide if first number shows X or O probability
@@ -50,6 +51,13 @@ class Game:
         self.last_monty_position = None  # Store Monty Hall position for choice
         self.player_turn_counts = [0, 0]  # Track turn counts for each player
         self.monty_hall_state = None  # Track active Monty Hall state
+        
+        # AI settings
+        self.ai_mode = ai_mode
+        self.ai_player_id = ai_player_id
+        self.ai_player = None
+        if ai_mode and ai_player_id is not None:
+            self.ai_player = EntropyTicTacToeAI(ai_player_id, ai_difficulty)
         
         # Auto-place center piece at start (but don't reveal it)
         self.board[4] = "placed"
@@ -475,7 +483,10 @@ class Game:
     
     def reset_game(self):
         """Reset game for play again"""
-        self.__init__()
+        ai_mode = getattr(self, 'ai_mode', False)
+        ai_player_id = getattr(self, 'ai_player_id', None)
+        ai_difficulty = getattr(self, 'ai_player', None).difficulty if hasattr(self, 'ai_player') and self.ai_player else 'expert'
+        self.__init__(ai_mode=ai_mode, ai_player_id=ai_player_id, ai_difficulty=ai_difficulty)
     
     def vote_play_again(self, player_id: int) -> bool:
         """Vote to play again, returns True if both players voted"""
@@ -498,6 +509,116 @@ class Game:
             "turn_timeout": self.turn_timeout,
             "monty_hall_state": self.monty_hall_state if self.monty_hall_state and self.monty_hall_state["player_id"] == player_id else None
         }
+
+class AIOpponent:
+    """Algorithmic AI opponent for single-player mode"""
+    
+    def __init__(self, difficulty="expert"):
+        self.difficulty = difficulty
+        self.player_id = 1  # AI is always player 1
+    
+    def choose_placement(self, game) -> int:
+        """Algorithm to choose placement position"""
+        available_positions = [i for i in range(9) if game.board[i] is None and i != 4]
+        
+        if not available_positions:
+            return None
+            
+        if self.difficulty == "easy":
+            return random.choice(available_positions)
+        
+        # Medium/Hard: Strategic placement
+        scores = []
+        for pos in available_positions:
+            score = self._evaluate_placement_position(pos, game)
+            scores.append((pos, score))
+        
+        # Sort by score and add some randomness for medium difficulty
+        scores.sort(key=lambda x: x[1], reverse=True)
+        
+        if self.difficulty == "medium" and len(scores) > 1:
+            # Sometimes pick second best move
+            if random.random() < 0.3:
+                return scores[1][0] if len(scores) > 1 else scores[0][0]
+        
+        return scores[0][0]
+    
+    def choose_reveal(self, game) -> int:
+        """Algorithm to choose reveal position"""
+        available_positions = [i for i in range(9) if game.board[i] is not None and not game.revealed_cells[i]]
+        
+        if not available_positions:
+            return None
+            
+        if self.difficulty == "easy":
+            return random.choice(available_positions)
+        
+        # Medium/Hard: Strategic reveal based on probabilities
+        scores = []
+        for pos in available_positions:
+            score = self._evaluate_reveal_position(pos, game)
+            scores.append((pos, score))
+        
+        scores.sort(key=lambda x: x[1], reverse=True)
+        
+        if self.difficulty == "medium" and len(scores) > 1:
+            # Sometimes pick second best move
+            if random.random() < 0.4:
+                return scores[1][0] if len(scores) > 1 else scores[0][0]
+        
+        return scores[0][0]
+    
+    def _evaluate_placement_position(self, position, game) -> float:
+        """Evaluate placement position value"""
+        score = 0
+        
+        # Strategic positions (corners and center area)
+        strategic_positions = [0, 2, 6, 8, 1, 3, 5, 7]  # corners first, then edges
+        if position in strategic_positions[:4]:  # corners
+            score += 30
+        elif position in strategic_positions[4:]:  # edges
+            score += 20
+        
+        # Check if position blocks or creates potential lines
+        lines = [
+            [0, 1, 2], [3, 4, 5], [6, 7, 8],  # rows
+            [0, 3, 6], [1, 4, 7], [2, 5, 8],  # columns
+            [0, 4, 8], [2, 4, 6]  # diagonals
+        ]
+        
+        for line in lines:
+            if position in line:
+                line_pieces = sum(1 for pos in line if game.board[pos] is not None)
+                if line_pieces == 1:  # One piece in line, good to add another
+                    score += 15
+                elif line_pieces == 2:  # Two pieces, very important position
+                    score += 50
+        
+        return score + random.random() * 5  # Add small random factor
+    
+    def _evaluate_reveal_position(self, position, game) -> float:
+        """Evaluate reveal position value based on probabilities"""
+        score = 0
+        prob1, prob2 = game.probabilities[position]
+        
+        # Prefer higher probability positions
+        max_prob = max(prob1, prob2)
+        score += max_prob
+        
+        # Check if revealing could create winning lines
+        lines = [
+            [0, 1, 2], [3, 4, 5], [6, 7, 8],  # rows
+            [0, 3, 6], [1, 4, 7], [2, 5, 8],  # columns
+            [0, 4, 8], [2, 4, 6]  # diagonals
+        ]
+        
+        for line in lines:
+            if position in line:
+                revealed_in_line = sum(1 for pos in line if game.revealed_cells[pos])
+                if revealed_in_line >= 1:  # Already have revelations in this line
+                    score += 25
+        
+        return score + random.random() * 10  # Add random factor
 
 def generate_room_code() -> str:
     """Generate a unique 6-character room code"""
@@ -539,8 +660,12 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str):
         }
         connections[room_code] = []
     
+    # Check if this is an AI room
+    is_ai_room = rooms[room_code].get("ai_mode", False)
+    
     # Check if room is full
-    if len(rooms[room_code]["players"]) >= 2:
+    max_players = 1 if is_ai_room else 2
+    if len(rooms[room_code]["players"]) >= max_players:
         await websocket.send_json({
             "type": "error",
             "message": "Room is full"
@@ -557,11 +682,23 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str):
     })
     connections[room_code].append(websocket)
     
+    # Add AI player if this is an AI room and human just joined
+    if is_ai_room and len(rooms[room_code]["players"]) == 1:
+        ai_player_id = rooms[room_code]["ai_player_id"]
+        ai_difficulty = rooms[room_code]["ai_difficulty"]
+        rooms[room_code]["players"].append({
+            "id": ai_player_id,
+            "name": f"AI ({ai_difficulty.title()})",
+            "websocket": None,  # AI doesn't have websocket
+            "is_ai": True
+        })
+    
     # Get game instance
     game = rooms[room_code]["game"]
     
-    # Start timer if this is the second player
-    if len(rooms[room_code]["players"]) == 2:
+    # Start timer if we have enough players (2 for normal, 1+AI for AI mode)
+    required_players = 1 if is_ai_room else 2
+    if len(rooms[room_code]["players"]) >= required_players:
         game.start_timer()
     
     # Send initial game state
@@ -570,8 +707,9 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str):
         "data": game.get_state(player_id),
         "room_info": {
             "code": room_code,
-            "players": [{"id": p["id"], "name": p["name"]} for p in rooms[room_code]["players"]],
-            "waiting_for_player": len(rooms[room_code]["players"]) < 2
+            "players": [{"id": p["id"], "name": p["name"], "is_ai": p.get("is_ai", False)} for p in rooms[room_code]["players"]],
+            "waiting_for_player": len(rooms[room_code]["players"]) < (1 if is_ai_room else 2),
+            "ai_mode": is_ai_room
         }
     })
     
@@ -581,10 +719,15 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str):
         "player": {"id": player_id, "name": player_name},
         "room_info": {
             "code": room_code,
-            "players": [{"id": p["id"], "name": p["name"]} for p in rooms[room_code]["players"]],
-            "waiting_for_player": len(rooms[room_code]["players"]) < 2
+            "players": [{"id": p["id"], "name": p["name"], "is_ai": p.get("is_ai", False)} for p in rooms[room_code]["players"]],
+            "waiting_for_player": len(rooms[room_code]["players"]) < (1 if is_ai_room else 2),
+            "ai_mode": is_ai_room
         }
     })
+    
+    # Start AI turn if needed
+    if is_ai_room and game.current_turn == game.ai_player_id:
+        asyncio.create_task(handle_ai_turn(room_code))
     
     try:
         async for message in websocket.iter_json():
@@ -626,8 +769,15 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str):
 
 async def handle_message(room_code: str, player_id: int, message: dict):
     """Handle incoming WebSocket messages"""
-    if room_code not in rooms or len(rooms[room_code]["players"]) < 2:
-        return  # Don't process game actions until 2 players
+    if room_code not in rooms:
+        return
+        
+    # Check if room has enough players
+    is_ai_room = rooms[room_code].get("ai_mode", False)
+    required_players = 1 if is_ai_room else 2
+    
+    if len(rooms[room_code]["players"]) < required_players:
+        return  # Don't process game actions until enough players
         
     game = rooms[room_code]["game"]
     msg_type = message.get("type")
@@ -635,77 +785,245 @@ async def handle_message(room_code: str, player_id: int, message: dict):
     if msg_type == "place_piece":
         position = message.get("position")
         if game.current_turn == player_id and game.place_piece(position):
-            game.current_turn = 1 - game.current_turn  # Switch turns
-            game.reset_turn_timer()  # Reset timer for new turn
-            
-            # Broadcast updated game state
-            await broadcast_game_state(room_code)
+            await handle_piece_placed(room_code)
     
     elif msg_type == "reveal_piece":
         position = message.get("position")
         if game.current_turn == player_id:
-            result = game.reveal_piece(position, player_id)
-            if result["success"]:
-                if result.get("monty_hall_active"):
-                    # Monty Hall is now active - broadcast to current player only to show the choice
-                    player_ws = next((p["websocket"] for p in rooms[room_code]["players"] if p["id"] == player_id), None)
-                    if player_ws:
-                        await player_ws.send_json({
-                            "type": "monty_hall_info",
-                            "monty_position": result["monty_position"],
-                            "monty_symbol": result["monty_symbol"],
-                            "piece_type": result["piece_type"],
-                            "strategy_hint": result["strategy_hint"]
-                        })
-                    # Broadcast game state to show visual indicators
-                    await broadcast_game_state(room_code)
-                elif result.get("private_reveal"):
-                    # Original tile chosen - public reveal but send notification to current player only
-                    player_ws = next((p["websocket"] for p in rooms[room_code]["players"] if p["id"] == player_id), None)
-                    if player_ws:
-                        await player_ws.send_json({
-                            "type": "choice_info", 
-                            "message": result["message"]
-                        })
-                    # Switch turns and broadcast
-                    game.current_turn = 1 - game.current_turn
-                    game.reset_turn_timer()
-                    await broadcast_game_state(room_code)
-                elif result.get("public_reveal"):
-                    # Public reveal - switch turns and broadcast
-                    game.current_turn = 1 - game.current_turn
-                    game.reset_turn_timer()
-                    await broadcast_game_state(room_code)
+            await handle_piece_revealed(room_code, player_id, position)
     
     elif msg_type == "chat_message":
-        player_name = next((p["name"] for p in rooms[room_code]["players"] if p["id"] == player_id), f"Player {player_id + 1}")
-        chat_msg = {
-            "type": "chat_message",
-            "player_id": player_id,
-            "player_name": player_name,
-            "message": message.get("message", ""),
-            "timestamp": datetime.now().isoformat()
-        }
-        rooms[room_code]["chat_history"].append(chat_msg)
-        await broadcast_to_room(room_code, chat_msg)
+        if not is_ai_room:  # Only allow chat in human vs human games
+            player_name = next((p["name"] for p in rooms[room_code]["players"] if p["id"] == player_id), f"Player {player_id + 1}")
+            chat_msg = {
+                "type": "chat_message",
+                "player_id": player_id,
+                "player_name": player_name,
+                "message": message.get("message", ""),
+                "timestamp": datetime.now().isoformat()
+            }
+            rooms[room_code]["chat_history"].append(chat_msg)
+            await broadcast_to_room(room_code, chat_msg)
     
     elif msg_type == "play_again":
-        if game.vote_play_again(player_id):
-            # Both players voted to play again, reset game
-            game.reset_game()
-            await broadcast_game_state(room_code)
-            await broadcast_to_room(room_code, {
-                "type": "game_reset",
-                "message": "New game started!"
-            })
+        print(f"Play again request from player {player_id} in room {room_code}")
+        print(f"Is AI room: {is_ai_room}")
+        
+        # In AI mode, immediately restart the game when human clicks play again
+        if is_ai_room:
+            print("AI mode: Immediately restarting game")
+            try:
+                # Reset game immediately without any voting
+                print("Step 1: Calling reset_game()")
+                game.reset_game()
+                print("Step 2: Calling start_timer()")
+                # Restart the timer
+                game.start_timer()
+                print("Step 3: Broadcasting game state")
+                await broadcast_game_state(room_code)
+                print("Step 4: Broadcasting game reset message")
+                await broadcast_to_room(room_code, {
+                    "type": "game_reset",
+                    "message": "New game started!"
+                })
+                
+                print("Step 5: Checking AI turn")
+                # Start AI turn if needed
+                if game.current_turn == game.ai_player_id:
+                    print(f"Starting AI turn for player {game.ai_player_id}")
+                    asyncio.create_task(handle_ai_turn(room_code))
+                else:
+                    print(f"Human turn - current turn: {game.current_turn}")
+                print("Play again complete!")
+            except Exception as e:
+                print(f"Error in play again: {e}")
+                import traceback
+                traceback.print_exc()
         else:
-            # Broadcast that this player wants to play again
+            # Regular 2-player room logic with voting
+            if game.vote_play_again(player_id):
+                # Both players voted to play again, reset game
+                game.reset_game()
+                # Restart the timer
+                game.start_timer()
+                await broadcast_game_state(room_code)
+                await broadcast_to_room(room_code, {
+                    "type": "game_reset",
+                    "message": "New game started!"
+                })
+            else:
+                # Broadcast that this player wants to play again
+                await broadcast_game_state(room_code)
+                await broadcast_to_room(room_code, {
+                    "type": "play_again_vote",
+                    "player_id": player_id,
+                    "message": f"Player {player_id + 1} wants to play again. Waiting for other player..."
+                })
+async def handle_piece_placed(room_code: str):
+    """Handle after a piece is placed"""
+    if room_code not in rooms:
+        return
+        
+    game = rooms[room_code]["game"]
+    is_ai_room = rooms[room_code].get("ai_mode", False)
+    
+    # Switch turns
+    game.current_turn = 1 - game.current_turn
+    game.reset_turn_timer()
+    
+    # Broadcast updated game state
+    await broadcast_game_state(room_code)
+    
+    # Handle AI turn if needed
+    if is_ai_room and game.current_turn == game.ai_player_id:
+        asyncio.create_task(handle_ai_turn(room_code))
+
+async def handle_piece_revealed(room_code: str, player_id: int, position: int):
+    """Handle after a piece is revealed"""
+    if room_code not in rooms:
+        return
+        
+    game = rooms[room_code]["game"]
+    is_ai_room = rooms[room_code].get("ai_mode", False)
+    
+    result = game.reveal_piece(position, player_id)
+    if result["success"]:
+        if result.get("monty_hall_active"):
+            # Monty Hall is now active
+            if player_id == game.ai_player_id:
+                # AI needs to make Monty Hall choice
+                asyncio.create_task(handle_ai_monty_hall_choice(room_code, result))
+            else:
+                # Human player - show choice interface
+                player_ws = next((p["websocket"] for p in rooms[room_code]["players"] if p["id"] == player_id), None)
+                if player_ws:
+                    await player_ws.send_json({
+                        "type": "monty_hall_info",
+                        "monty_position": result["monty_position"],
+                        "monty_symbol": result["monty_symbol"],
+                        "piece_type": result["piece_type"],
+                        "strategy_hint": result["strategy_hint"]
+                    })
+            # Broadcast game state to show visual indicators
             await broadcast_game_state(room_code)
-            await broadcast_to_room(room_code, {
-                "type": "play_again_vote",
-                "player_id": player_id,
-                "message": f"Player {player_id + 1} wants to play again. Waiting for other player..."
-            })
+        elif result.get("private_reveal"):
+            # Original tile chosen - public reveal but send notification to current player only
+            if not (player_id == game.ai_player_id):  # Don't send to AI
+                player_ws = next((p["websocket"] for p in rooms[room_code]["players"] if p["id"] == player_id), None)
+                if player_ws:
+                    await player_ws.send_json({
+                        "type": "choice_info", 
+                        "message": result["message"]
+                    })
+            await finish_turn(room_code)
+        elif result.get("public_reveal"):
+            # Public reveal
+            await finish_turn(room_code)
+
+async def finish_turn(room_code: str):
+    """Finish the current turn and switch to next player"""
+    if room_code not in rooms:
+        return
+        
+    game = rooms[room_code]["game"]
+    is_ai_room = rooms[room_code].get("ai_mode", False)
+    
+    # Switch turns and broadcast
+    game.current_turn = 1 - game.current_turn
+    game.reset_turn_timer()
+    await broadcast_game_state(room_code)
+    
+    # Handle AI turn if needed
+    if is_ai_room and game.current_turn == game.ai_player_id and not game.game_over:
+        asyncio.create_task(handle_ai_turn(room_code))
+
+async def handle_ai_turn(room_code: str):
+    """Handle AI making a move"""
+    if room_code not in rooms:
+        return
+        
+    game = rooms[room_code]["game"]
+    is_ai_room = rooms[room_code].get("ai_mode", False)
+    
+    if not is_ai_room or game.current_turn != game.ai_player_id or game.game_over:
+        return
+    
+    # Check if AI is in Monty Hall state (should be handled by separate function)
+    if game.monty_hall_state and game.monty_hall_state["player_id"] == game.ai_player_id:
+        return  # Monty Hall choice is handled separately
+    
+    try:
+        # Get AI move
+        game_state = game.get_state(game.ai_player_id)
+        position = await game.ai_player.make_move(game_state, game)
+        
+        # Execute the move
+        if game_state["phase"] == "placement":
+            if game.place_piece(position):
+                await handle_piece_placed(room_code)
+        elif game_state["phase"] == "reveal":
+            await handle_piece_revealed(room_code, game.ai_player_id, position)
+            
+    except Exception as e:
+        print(f"AI turn error in room {room_code}: {e}")
+        # On error, make random valid move
+        valid_moves = get_valid_moves_for_game(game)
+        if valid_moves:
+            position = random.choice(valid_moves)
+            
+            game_state = game.get_state(game.ai_player_id)
+            if game_state["phase"] == "placement":
+                if game.place_piece(position):
+                    await handle_piece_placed(room_code)
+            elif game_state["phase"] == "reveal":
+                await handle_piece_revealed(room_code, game.ai_player_id, position)
+
+async def handle_ai_monty_hall_choice(room_code: str, monty_hall_result: dict):
+    """Handle AI making a Monty Hall choice"""
+    if room_code not in rooms:
+        return
+        
+    game = rooms[room_code]["game"]
+    
+    try:
+        # Get AI choice
+        game_state = game.get_state(game.ai_player_id)
+        choice = await game.ai_player.make_monty_hall_choice(game_state, game.monty_hall_state)
+        
+        # Execute the choice
+        if choice == "original":
+            # AI chose original tile
+            result = game._complete_private_reveal(game.monty_hall_state["original_position"])
+            game.monty_hall_state = None
+            await finish_turn(room_code)
+        elif choice == "monty":
+            # AI chose Monty Hall tile
+            result = game._complete_public_reveal(game.monty_hall_state["monty_position"])
+            game.monty_hall_state = None
+            await finish_turn(room_code)
+            
+    except Exception as e:
+        print(f"AI Monty Hall error in room {room_code}: {e}")
+        # Default to original choice on error
+        result = game._complete_private_reveal(game.monty_hall_state["original_position"])
+        game.monty_hall_state = None
+        await finish_turn(room_code)
+
+def get_valid_moves_for_game(game) -> List[int]:
+    """Get valid moves for current game state"""
+    valid_moves = []
+    
+    if game.phase == "placement":
+        for i in range(9):
+            if game.board[i] is None and i != 4:  # Can't place on center
+                valid_moves.append(i)
+    else:  # reveal phase
+        for i in range(9):
+            if game.board[i] == "placed" and not game.revealed_cells[i]:
+                valid_moves.append(i)
+    
+    return valid_moves
+
 async def broadcast_to_room(room_code: str, message: dict):
     """Broadcast a message to all players in a room"""
     if room_code not in connections:
@@ -728,16 +1046,22 @@ async def broadcast_game_state(room_code: str):
         return
         
     game = rooms[room_code]["game"]
+    is_ai_room = rooms[room_code].get("ai_mode", False)
     
     for i, player in enumerate(rooms[room_code]["players"]):
+        # Skip AI players (they don't have websockets)
+        if player.get("is_ai", False) or not player.get("websocket"):
+            continue
+            
         try:
             await player["websocket"].send_json({
                 "type": "game_state",
                 "data": game.get_state(i),
                 "room_info": {
                     "code": room_code,
-                    "players": [{"id": p["id"], "name": p["name"]} for p in rooms[room_code]["players"]],
-                    "waiting_for_player": len(rooms[room_code]["players"]) < 2
+                    "players": [{"id": p["id"], "name": p["name"], "is_ai": p.get("is_ai", False)} for p in rooms[room_code]["players"]],
+                    "waiting_for_player": len(rooms[room_code]["players"]) < (1 if is_ai_room else 2),
+                    "ai_mode": is_ai_room
                 }
             })
         except:
@@ -752,6 +1076,29 @@ async def create_room():
     """Create a new room and return the room code"""
     room_code = generate_room_code()
     return {"room_code": room_code}
+
+@app.get("/create_ai_room")
+async def create_ai_room(difficulty: str = "expert"):
+    """Create a new room with AI opponent"""
+    room_code = generate_room_code()
+    
+    # Validate difficulty
+    if difficulty not in ["easy", "medium", "hard", "expert"]:
+        difficulty = "expert"
+    
+    # Initialize room with AI
+    ai_player_id = 1  # AI is always player 1
+    rooms[room_code] = {
+        "players": [],
+        "game": Game(ai_mode=True, ai_player_id=ai_player_id, ai_difficulty=difficulty),
+        "chat_history": [],
+        "ai_mode": True,
+        "ai_player_id": ai_player_id,
+        "ai_difficulty": difficulty
+    }
+    connections[room_code] = []
+    
+    return {"room_code": room_code, "ai_mode": True, "difficulty": difficulty}
 
 @app.on_event("startup")
 async def startup_event():

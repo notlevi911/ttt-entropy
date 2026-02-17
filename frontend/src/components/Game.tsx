@@ -42,6 +42,11 @@ const Game: React.FC<GameProps> = ({ roomCode, playerName, onBackToLobby }) => {
 
   useEffect(() => {
     const connectToRoom = (): void => {
+      // Close existing connection if any
+      if (wsRef.current && wsRef.current.readyState !== WebSocket.CLOSED) {
+        wsRef.current.close();
+      }
+      
       const wsUrl = process.env.REACT_APP_WS_URL || 'ws://localhost:8000';
       const ws = new WebSocket(`${wsUrl}/ws/${roomCode}`);
       wsRef.current = ws;
@@ -67,9 +72,11 @@ const Game: React.FC<GameProps> = ({ roomCode, playerName, onBackToLobby }) => {
         }
       };
 
-      ws.onclose = () => {
+      ws.onclose = (event) => {
         console.log('WebSocket connection closed');
-        setConnectionStatus('disconnected');
+        if (event.code !== 1000) { // Not a normal closure
+          setConnectionStatus('disconnected');
+        }
       };
 
       ws.onerror = () => {
@@ -86,8 +93,7 @@ const Game: React.FC<GameProps> = ({ roomCode, playerName, onBackToLobby }) => {
         wsRef.current.close();
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomCode, playerName]);
+  }, [roomCode]); // Removed playerName from dependencies
 
   const handleWebSocketMessage = (message: WebSocketMessage): void => {
     switch (message.type) {
@@ -151,7 +157,7 @@ const Game: React.FC<GameProps> = ({ roomCode, playerName, onBackToLobby }) => {
       case 'monty_hall_info':
         if (message.monty_symbol && message.piece_type && message.strategy_hint) {
           addNotification(
-            `🎯 Private reveal: ${message.monty_symbol} (${message.piece_type} piece). ${message.strategy_hint}`,
+            `Private reveal: ${message.monty_symbol} (${message.piece_type} piece). ${message.strategy_hint}`,
             'info'
           );
         }
@@ -253,14 +259,14 @@ const Game: React.FC<GameProps> = ({ roomCode, playerName, onBackToLobby }) => {
         />
       </div>
 
-      {playAgainStatus && (
+      {playAgainStatus && !roomInfo?.ai_mode && (
         <div className="play-again-status waiting">
           {playAgainStatus}
         </div>
       )}
 
       <div className="game-content">
-        <div className="game-board-container">
+        <div className={`game-board-container ${roomInfo?.ai_mode ? 'ai-mode' : ''}`}>
           <GameBoard
             gameState={gameState}
             roomInfo={roomInfo}
@@ -272,13 +278,15 @@ const Game: React.FC<GameProps> = ({ roomCode, playerName, onBackToLobby }) => {
           />
         </div>
 
-        <div className="chat-container">
-          <ChatPanel
-            messages={chatMessages}
-            onSendMessage={sendChatMessage}
-            currentPlayer={currentPlayer}
-          />
-        </div>
+        {!roomInfo?.ai_mode && (
+          <div className="chat-container">
+            <ChatPanel
+              messages={chatMessages}
+              onSendMessage={sendChatMessage}
+              currentPlayer={currentPlayer}
+            />
+          </div>
+        )}
       </div>
 
       <RulesPopup isOpen={showRules} onClose={() => setShowRules(false)} />
