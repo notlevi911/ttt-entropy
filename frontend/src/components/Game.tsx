@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { GameState, WebSocketMessage, RoomInfo } from '../types';
 import GameBoard from './GameBoard';
 import ChatPanel from './ChatPanel';
@@ -30,72 +30,17 @@ const Game: React.FC<GameProps> = ({ roomCode, playerName, onBackToLobby }) => {
   
   const wsRef = useRef<WebSocket | null>(null);
 
-  const addNotification = (message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
+  const addNotification = useCallback((message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
     const id = Date.now().toString();
     const newNotification: GameNotification = { id, message, type };
     setNotifications(prev => [...prev, newNotification]);
-  };
+  }, []);
 
   const removeNotification = (id: string) => {
     setNotifications(prev => prev.filter(n => n.id !== id));
   };
 
-  useEffect(() => {
-    const connectToRoom = (): void => {
-      // Close existing connection if any
-      if (wsRef.current && wsRef.current.readyState !== WebSocket.CLOSED) {
-        wsRef.current.close();
-      }
-      
-      const wsUrl = process.env.REACT_APP_WS_URL || 'ws://localhost:8000';
-      const ws = new WebSocket(`${wsUrl}/ws/${roomCode}`);
-      wsRef.current = ws;
-
-      ws.onopen = () => {
-        console.log('Connected to room:', roomCode);
-        setConnectionStatus('connected');
-        setErrorMessage('');
-        
-        // Send join message with player name
-        ws.send(JSON.stringify({
-          type: 'join',
-          player_name: playerName
-        }));
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const message: WebSocketMessage = JSON.parse(event.data);
-          handleWebSocketMessage(message);
-        } catch (error) {
-          console.error('Error parsing WebSocket message:', error);
-        }
-      };
-
-      ws.onclose = (event) => {
-        console.log('WebSocket connection closed');
-        if (event.code !== 1000) { // Not a normal closure
-          setConnectionStatus('disconnected');
-        }
-      };
-
-      ws.onerror = () => {
-        console.error('WebSocket connection error');
-        setConnectionStatus('error');
-        setErrorMessage('Failed to connect to game server');
-      };
-    };
-    
-    connectToRoom();
-    
-    return () => {
-      if (wsRef.current) {
-        wsRef.current.close();
-      }
-    };
-  }, [roomCode]); // Removed playerName from dependencies
-
-  const handleWebSocketMessage = (message: WebSocketMessage): void => {
+  const handleWebSocketMessage = useCallback((message: WebSocketMessage): void => {
     switch (message.type) {
       case 'game_state':
         if (message.data) {
@@ -171,7 +116,62 @@ const Game: React.FC<GameProps> = ({ roomCode, playerName, onBackToLobby }) => {
       default:
         console.log('Unknown message type:', message.type);
     }
-  };
+  }, [roomInfo, onBackToLobby, addNotification]);
+
+  useEffect(() => {
+    const connectToRoom = (): void => {
+      // Close existing connection if any
+      if (wsRef.current && wsRef.current.readyState !== WebSocket.CLOSED) {
+        wsRef.current.close();
+      }
+      
+      const wsUrl = process.env.REACT_APP_WS_URL || 'ws://localhost:8000';
+      const ws = new WebSocket(`${wsUrl}/ws/${roomCode}`);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        console.log('Connected to room:', roomCode);
+        setConnectionStatus('connected');
+        setErrorMessage('');
+        
+        // Send join message with player name
+        ws.send(JSON.stringify({
+          type: 'join',
+          player_name: playerName
+        }));
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const message: WebSocketMessage = JSON.parse(event.data);
+          handleWebSocketMessage(message);
+        } catch (error) {
+          console.error('Error parsing WebSocket message:', error);
+        }
+      };
+
+      ws.onclose = (event) => {
+        console.log('WebSocket connection closed');
+        if (event.code !== 1000) { // Not a normal closure
+          setConnectionStatus('disconnected');
+        }
+      };
+
+      ws.onerror = () => {
+        console.error('WebSocket connection error');
+        setConnectionStatus('error');
+        setErrorMessage('Failed to connect to game server');
+      };
+    };
+    
+    connectToRoom();
+    
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
+  }, [roomCode, playerName, handleWebSocketMessage]);
 
   const sendMessage = (message: any): void => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
