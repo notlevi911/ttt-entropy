@@ -102,12 +102,7 @@ const Game: React.FC<GameProps> = ({ roomCode, playerName, onBackToLobby }) => {
         break;
 
       case 'monty_hall_info':
-        if (message.monty_symbol && message.piece_type && message.strategy_hint) {
-          addNotification(
-            `Private reveal: ${message.monty_symbol} (${message.piece_type} piece). ${message.strategy_hint}`,
-            'info'
-          );
-        }
+        // Strategy hints removed - no notification shown
         break;
 
       case 'error':
