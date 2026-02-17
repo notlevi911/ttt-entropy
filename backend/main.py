@@ -20,9 +20,30 @@ app = FastAPI()
 # Add CORS middleware
 frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
+# Allow multiple origins for development and production
+allowed_origins = [
+    "http://localhost:3000",  # Local development
+    "https://localhost:3000",  # Local development with https
+]
+
+# Add the environment-specified frontend URL if it's different
+if frontend_url not in allowed_origins:
+    allowed_origins.append(frontend_url)
+
+# Also allow any Vercel deployment URL if specified
+vercel_url = os.getenv("VERCEL_URL")
+if vercel_url:
+    allowed_origins.append(f"https://{vercel_url}")
+
+# For development/testing, allow all origins if specified
+if os.getenv("ALLOW_ALL_ORIGINS", "false").lower() == "true":
+    allowed_origins = ["*"]
+
+print(f"CORS allowed origins: {allowed_origins}")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[frontend_url],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
