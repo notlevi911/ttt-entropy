@@ -58,12 +58,14 @@ const Game: React.FC<GameProps> = ({ roomCode, playerName, onBackToLobby }) => {
         break;
 
       case 'player_left':
-        if (message.player_id !== undefined && roomInfo) {
-          const updatedRoomInfo = {
-            ...roomInfo,
-            players: roomInfo.players.filter(p => p.id !== message.player_id)
-          };
-          setRoomInfo(updatedRoomInfo);
+        if (message.player_id !== undefined) {
+          setRoomInfo(prevRoomInfo => {
+            if (!prevRoomInfo) return prevRoomInfo;
+            return {
+              ...prevRoomInfo,
+              players: prevRoomInfo.players.filter(p => p.id !== message.player_id)
+            };
+          });
         }
         break;
 
@@ -116,7 +118,7 @@ const Game: React.FC<GameProps> = ({ roomCode, playerName, onBackToLobby }) => {
       default:
         console.log('Unknown message type:', message.type);
     }
-  }, [roomInfo, onBackToLobby, addNotification]);
+  }, [onBackToLobby, addNotification]);
 
   useEffect(() => {
     const connectToRoom = (): void => {
