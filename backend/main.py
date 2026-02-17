@@ -485,7 +485,7 @@ class Game:
         """Reset game for play again"""
         ai_mode = getattr(self, 'ai_mode', False)
         ai_player_id = getattr(self, 'ai_player_id', None)
-        ai_difficulty = getattr(self, 'ai_player', None).difficulty if hasattr(self, 'ai_player') and self.ai_player else 'expert'
+        ai_difficulty = self.ai_player.difficulty if hasattr(self, 'ai_player') and self.ai_player else 'expert'
         self.__init__(ai_mode=ai_mode, ai_player_id=ai_player_id, ai_difficulty=ai_difficulty)
     
     def vote_play_again(self, player_id: int) -> bool:
