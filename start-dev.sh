@@ -83,5 +83,5 @@ cleanup() {
 trap cleanup SIGINT SIGTERM
 
 # Keep script running
-echo "💡 Press Ctrl+C to stop all servers"
+echo "💡 Press Ctrl+C to stop all servers ye"
 wait
